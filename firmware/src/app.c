@@ -75,6 +75,7 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 static int tickRpm = 0;
 static int tickActual = 0;
 static int tickFase = 0;
+static int contaDientesCig = 0;
 // *****************************************************************************
 /* Application Data
 
@@ -171,8 +172,8 @@ void APP_Tasks ( void )
 
         case APP_STATE_SERVICE_TASKS:
         {
-            crankshaftSignal(1200);
-            camshaftSignal(1200);
+            crankshaftSignal(100);
+            camshaftSignal(100);
             analog_read();
             break;
         }
@@ -214,7 +215,7 @@ void analog_read()
 
 }
 
-int crankshaftSignal(int rpm)
+void crankshaftSignal(int rpm)
 {
     //para 1200 rpm el perido es de 50ms
     //cantidad de ticks para 1200 rpm = 1000
@@ -226,9 +227,8 @@ int crankshaftSignal(int rpm)
     //grados = ticks1Rpm / 360;
     static int periodo = 0;
     periodo = ((60000000) / (rpmAux * 36 * 10));   //periodo en ticks
-    static int duty;
-    int dutyPulsoNormal = periodo / 2;
-    int dutyPulsoRef = periodo / 6;
+    static int dutyPos =  0;
+    static int dutyNeg = 0;
     static int stage = 0;
     static int contaDientes = 0;
     switch(stage)
@@ -237,31 +237,39 @@ int crankshaftSignal(int rpm)
             tickRpm = 0;
             tickActual = 0;
             contaDientes = 0;
-            duty = dutyPulsoNormal;
+            contaDientesCig = 0;
+            dutyPos =  ((periodo * 20) / 100);
+            dutyNeg = (periodo - dutyPos);
             stage++;
             break;
         case 1:
-            if(tickRpm >= duty)
+            if(tickRpm >= dutyNeg)
             {
                 rpmSignal = 1;
                 tickRpm = 0;
                 if(contaDientes >=37)
                 {
-                    duty = dutyPulsoNormal;
+                    dutyPos = ((periodo * 20) / 100);
+                    dutyNeg = (periodo - dutyPos);
                     contaDientes = 0;
+                    contaDientesCig = 0;
+                    grados = tickActual / ticksPorGrados;
+                    tickActual = 0;
                 }
                 stage++;
             }
             break;
         case 2:
-            if(tickRpm >= duty)
+            if(tickRpm >= dutyPos)
             {
                 rpmSignal = 0;
                 tickRpm = 0;
                 contaDientes++;
-                if(contaDientes >= 36) 
+                contaDientesCig++;
+                if(contaDientes == 36) 
                 {
-                    duty = dutyPulsoRef;
+                    dutyPos = (dutyNeg / 3);
+                    dutyNeg = (dutyNeg / 3);
                 }
                 stage = 1;
             }
@@ -269,51 +277,57 @@ int crankshaftSignal(int rpm)
         default:
             break;
     }
-    //return grados;
 }
 
 void camshaftSignal(int rpm)
 {
-    int rpmAux = rpm / 2;
+    int rpmAux = (rpm / 2);
     static int stage = 0;
     static int contaDientes = 0;
     static int periodo = 0;
-    static int duty;
-    int dutyPulsoNormal = periodo / 2;
-    int dutyPulsoRef = periodo / 6;
+    static int dutyPos =  0;
+    static int dutyNeg = 0;
     periodo = ((60000000) / (rpmAux * 12 * 10));   //periodo en ticks
     switch(stage)
     {
         case 0:
             tickFase = 0;
             contaDientes = 0;
-            duty = dutyPulsoNormal;
-            stage++;
+            dutyPos =  ((periodo * 20) / 100);
+            dutyNeg = (periodo - dutyPos);
+            //if(contaDientesCig >= 1)
+            //{
+               stage++; 
+            //}
+            
             break;
         case 1:
-            if(tickFase >= duty)
+            if(tickFase >= dutyNeg)
             {
                 faseSignal = 1;
                 tickFase = 0;
                 if(contaDientes >=13)
                 {
-                    duty = dutyPulsoNormal;
+                    dutyPos = ((periodo * 20) / 100);
+                    dutyNeg = (periodo - dutyPos);
                     contaDientes = 0;
                 }
                 stage++;
             }
             break;
         case 2:
-            if(tickFase >= duty)
+            if(tickFase >= dutyPos)
             {
                 faseSignal = 0;
                 tickFase = 0;
                 contaDientes++;
-                if(contaDientes >= 12) 
+                if(contaDientes == 12) 
                 {
-                    duty = dutyPulsoRef;
+                    dutyPos = (dutyNeg / 3);
+                    dutyNeg = (dutyNeg / 3);
                 }
                 stage = 1;
+                //stage = 1;
             }
             break;
         default:

@@ -75,7 +75,9 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 static int tickRpm = 0;
 static int tickActual = 0;
 static int tickFase = 0;
+static int dutyPosAux = 0;
 static int contaDientesCig = 0;
+int rpm;
 // *****************************************************************************
 /* Application Data
 
@@ -172,9 +174,10 @@ void APP_Tasks ( void )
 
         case APP_STATE_SERVICE_TASKS:
         {
+            rpm = analogValueRpm();
             crankshaftSignal(100);
             camshaftSignal(100);
-            analog_read();
+            
             break;
         }
 
@@ -188,31 +191,6 @@ void APP_Tasks ( void )
             break;
         }
     }
-}
-
-void analog_read()
-{
-    static int estate=0;
-    int result;
-    switch(estate)
-    {
-
-        case 0: //DRV_ADC_Start();    //start sample
-                        
-            //        if(PLIB_ADC_ConversionHasCompleted(DRV_ADC_ID_1)==1)  //convertion completed
-                        PLIB_ADC_SampleAutoStartEnable(ADC_ID_1);
-           //                 result=PLIB_ADC_ResultGetByIndex(ADC_ID_1, 0);
-                            
-                            result=DRV_ADC_SamplesRead(0);   //buffer 0???
-                            result=result;
-                        
-                estate++;
-                break;
-        case 1: 
-                estate=0;
-                break;
-    }
-
 }
 
 void crankshaftSignal(int rpm)
@@ -247,9 +225,11 @@ void crankshaftSignal(int rpm)
             {
                 rpmSignal = 1;
                 tickRpm = 0;
+                
                 if(contaDientes >=37)
                 {
                     dutyPos = ((periodo * 20) / 100);
+                    dutyPosAux = dutyPos; //Ancho de pulso igual CMP = CKP
                     dutyNeg = (periodo - dutyPos);
                     contaDientes = 0;
                     contaDientesCig = 0;
@@ -293,12 +273,10 @@ void camshaftSignal(int rpm)
         case 0:
             tickFase = 0;
             contaDientes = 0;
-            dutyPos =  ((periodo * 20) / 100);
+            dutyPos = dutyPosAux;//dutyPos =  ((periodo * 20) / 100);
             dutyNeg = (periodo - dutyPos);
-            //if(contaDientesCig >= 1)
-            //{
-               stage++; 
-            //}
+            
+            stage++;
             
             break;
         case 1:
@@ -306,9 +284,13 @@ void camshaftSignal(int rpm)
             {
                 faseSignal = 1;
                 tickFase = 0;
+                if(contaDientes == 12)
+                {
+                    dutyNeg = (((periodo - dutyPos) * 2) / (3));
+                }
                 if(contaDientes >=13)
                 {
-                    dutyPos = ((periodo * 20) / 100);
+                    dutyPos = dutyPosAux;//dutyPos = ((periodo * 20) / 100);
                     dutyNeg = (periodo - dutyPos);
                     contaDientes = 0;
                 }
@@ -323,11 +305,10 @@ void camshaftSignal(int rpm)
                 contaDientes++;
                 if(contaDientes == 12) 
                 {
-                    dutyPos = (dutyNeg / 3);
+                    dutyPos = dutyPosAux;//dutyPos = (dutyNeg / 3);
                     dutyNeg = (dutyNeg / 3);
                 }
                 stage = 1;
-                //stage = 1;
             }
             break;
         default:
@@ -343,7 +324,20 @@ void tick10us()
     tickFase++;
     
 }
-
+int analogValueRpm()
+{
+    int value;
+    if(DRV_ADC_SamplesAvailable)
+    {
+        value = DRV_ADC_SamplesRead(0);
+        while(!AD1CON1bits.DONE)
+        {
+            Nop();
+        }
+        AD1CON1bits.DONE = 0;
+    }
+    return value;
+}
 /*******************************************************************************
  End of File
  */

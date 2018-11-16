@@ -200,7 +200,7 @@ void APP_Tasks( void );
 
 void crankshaftSignal(int rpm);
 void camshaftSignal(int rpm);
-void analog_read();
+int analogValueRpm();
 void tick50us();
 void tick10us();
 

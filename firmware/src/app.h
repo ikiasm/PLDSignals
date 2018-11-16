@@ -198,8 +198,8 @@ void APP_Initialize ( void );
 
 void APP_Tasks( void );
 
-void crankshaftSignal(int rpm);
-void camshaftSignal(int rpm);
+void crankshaftSignal();
+void camshaftSignal();
 void analog_read();
 void tick50us();
 void tick10us();

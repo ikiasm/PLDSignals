@@ -54,6 +54,7 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 // *****************************************************************************
 
 #include "app.h"
+#include "generales.h"
 #include "peripheral/ports/plib_ports.h"
 #include "peripheral/adc/plib_adc.h"
 #include "system/system.h"
@@ -70,7 +71,7 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 #define faseTRIS    TRISBbits.TRISB14
 #define rpmSignal   LATBbits.LATB15
 #define faseSignal  LATBbits.LATB14
-
+#define RPM 1200
 
 static int tickRpm = 0;
 static int tickActual = 0;
@@ -172,8 +173,8 @@ void APP_Tasks ( void )
 
         case APP_STATE_SERVICE_TASKS:
         {
-            crankshaftSignal(100);
-            camshaftSignal(100);
+            crankshaftSignal();
+            camshaftSignal();
             analog_read();
             break;
         }
@@ -215,22 +216,25 @@ void analog_read()
 
 }
 
-void crankshaftSignal(int rpm)
+void crankshaftSignal()
 {
     //para 1200 rpm el perido es de 50ms
     //cantidad de ticks para 1200 rpm = 1000
     //aprox 28 ticks por pulso
-    int rpmAux = rpm;
-    int ticksPorGrados;
-    int grados;
-    ticksPorGrados = 60000000 / (rpmAux * 10 * 360);
+    UInt32 rpmAux;
+    UInt32 ticksPorGrados;
+    UInt8 grados;
     //grados = ticks1Rpm / 360;
-    static int periodo = 0;
-    periodo = ((60000000) / (rpmAux * 36 * 10));   //periodo en ticks
-    static int dutyPos =  0;
-    static int dutyNeg = 0;
-    static int stage = 0;
-    static int contaDientes = 0;
+    UInt32 periodo = 0;
+    static UInt16 dutyPos =  0;
+    static UInt16 dutyNeg = 0;
+    static UInt16 stage = 0;
+    static UInt16 contaDientes = 0;
+    
+    rpmAux = RPM;
+    ticksPorGrados = 60000000 / (rpmAux * 10 * 360);
+    periodo = ((60000000) / (rpmAux * 36 * 10));   //periodo en ticks (ticks de un pulso))
+    periodo=periodo;
     switch(stage)
     {
         case 0:
@@ -279,21 +283,22 @@ void crankshaftSignal(int rpm)
     }
 }
 
-void camshaftSignal(int rpm)
+void camshaftSignal()
 {
-    int rpmAux = (rpm / 2);
-    static int stage = 0;
-    static int contaDientes = 0;
-    static int periodo = 0;
-    static int dutyPos =  0;
-    static int dutyNeg = 0;
-    periodo = ((60000000) / (rpmAux * 12 * 10));   //periodo en ticks
-    switch(stage)
-    {
+    UInt32 rpmAux;
+    UInt32 periodo = 0;
+    static UInt8 stage = 0;
+    static UInt8 contaDientes = 0;
+    static UInt16 dutyPos =  0;
+    static UInt16 dutyNeg = 0;
+    rpmAux = (RPM * 2);
+    periodo = ((600000000) / (rpmAux * 12 * 1));   //periodo en ticks. Para 1200 rpm = 208,333 tick
+    switch(stage)                                   //se agregaron ceros para quitar los decimales y no usar float
+    {                                               //pero poder tener mas precision. Entonces quedan 20833 tick
         case 0:
             tickFase = 0;
             contaDientes = 0;
-            dutyPos =  ((periodo * 20) / 100);
+            dutyPos =  ((periodo * 20) / 100);       //20833*20/100=4166,6
             dutyNeg = (periodo - dutyPos);
             //if(contaDientesCig >= 1)
             //{

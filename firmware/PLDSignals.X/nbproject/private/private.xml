@@ -3,9 +3,10 @@
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
         <group>
-            <file>file:/Users/marcelo/microchip/harmony/v1_07_01/apps/PLDSignals/firmware/src/main.c</file>
-            <file>file:/Users/marcelo/microchip/harmony/v1_07_01/apps/PLDSignals/firmware/src/app.c</file>
-            <file>file:/Users/marcelo/microchip/harmony/v1_07_01/apps/PLDSignals/firmware/src/app.h</file>
+            <file>file:/C:/microchip/harmony/v2_06/apps/PLDSignals/firmware/src/app.h</file>
+            <file>file:/C:/microchip/harmony/v2_06/apps/PLDSignals/firmware/src/main.c</file>
+            <file>file:/C:/microchip/harmony/v2_06/apps/PLDSignals/firmware/src/app.c</file>
+            <file>file:/C:/microchip/harmony/v2_06/apps/PLDSignals/firmware/src/generales.h</file>
         </group>
     </open-files>
 </project-private>

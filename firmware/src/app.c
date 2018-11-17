@@ -77,7 +77,9 @@ static int tickActual = 0;
 static int tickFase = 0;
 static int dutyPosAux = 0;
 static int contaDientesCig = 0;
-int rpm;
+
+static int analogValue = 0;
+static int rpm = 100;
 // *****************************************************************************
 /* Application Data
 
@@ -162,7 +164,12 @@ void APP_Tasks ( void )
             
             rpmTRIS = 0;
             faseTRIS = 0;
+            
             DRV_ADC_Open();
+            DRV_ADC_Start();
+            analogInit();
+            DRV_TMR1_Start();
+            
             
             if (appInitialized)
             {
@@ -174,9 +181,8 @@ void APP_Tasks ( void )
 
         case APP_STATE_SERVICE_TASKS:
         {
-            rpm = analogValueRpm();
-            crankshaftSignal(100);
-            camshaftSignal(100);
+            crankshaftSignal(rpm);
+            camshaftSignal(rpm);
             
             break;
         }
@@ -324,19 +330,26 @@ void tick10us()
     tickFase++;
     
 }
-int analogValueRpm()
+
+void analogicValue()
+{   
+    analogValue = ADC1BUF0;
+    //maximo valor de rpm = 4196
+    //minimo valor de rpm = 100
+    rpm = ((4 * analogValue) + 100);
+}
+
+void analogInit()
 {
-    int value;
-    if(DRV_ADC_SamplesAvailable)
-    {
-        value = DRV_ADC_SamplesRead(0);
-        while(!AD1CON1bits.DONE)
-        {
-            Nop();
-        }
-        AD1CON1bits.DONE = 0;
-    }
-    return value;
+    AD1CON1bits.SSRC = 0x02;    //Hago coincidir el Timer 3 con el fin del sample de la señal y empieza la conversion
+    AD1CSSLbits.CSSL = 0x00;    //Todos los ANX scan estan disable
+    AD1CON3bits.ADCS = 0x00;    //ADC conversion clock -> TAD = 2 * TPB
+    AD1CON3bits.ADRC = 0x0;     //Uso el clock de perifericos
+    AD1CON3bits.SAMC = 0x00;    //Auto-Sample time bits (lo dejo en cero aunque diga no esta permitido, asi estaba en el datasheet)
+    AD1CON2bits.SMPI = 0x01;    //Interrupts at the completion of conversion for each 2nd sample/convert sequence
+    
+    AD1CON1bits.ADON = 1;       //ADC ON
+    AD1CON1bits.ASAM = 1;       //Sampling begins immediately after last conversion completes; SAMP bit is automatically set
 }
 /*******************************************************************************
  End of File

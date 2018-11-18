@@ -75,8 +75,14 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 
 static int tickRpm = 0;
 static int tickActual = 0;
+static int tickControlPh = 0;
+static int pulsoFase = 0;
 static int tickFase = 0;
 static int contaDientesCig = 0;
+static int dutyPosAux = 0;
+
+static int analogValue = 0;
+static int rpm = 100;
 // *****************************************************************************
 /* Application Data
 
@@ -161,7 +167,11 @@ void APP_Tasks ( void )
             
             rpmTRIS = 0;
             faseTRIS = 0;
+            
             DRV_ADC_Open();
+            DRV_ADC_Start();
+            analogInit();
+            DRV_TMR1_Start();
             
             if (appInitialized)
             {
@@ -173,9 +183,8 @@ void APP_Tasks ( void )
 
         case APP_STATE_SERVICE_TASKS:
         {
-            crankshaftSignal();
-            camshaftSignal();
-            analog_read();
+            crankshaftSignal(RPM);
+            //camshaftSignal_2(RPM);
             break;
         }
 
@@ -191,57 +200,35 @@ void APP_Tasks ( void )
     }
 }
 
-void analog_read()
-{
-    static int estate=0;
-    int result;
-    switch(estate)
-    {
-
-        case 0: //DRV_ADC_Start();    //start sample
-                        
-            //        if(PLIB_ADC_ConversionHasCompleted(DRV_ADC_ID_1)==1)  //convertion completed
-                        PLIB_ADC_SampleAutoStartEnable(ADC_ID_1);
-           //                 result=PLIB_ADC_ResultGetByIndex(ADC_ID_1, 0);
-                            
-                            result=DRV_ADC_SamplesRead(0);   //buffer 0???
-                            result=result;
-                        
-                estate++;
-                break;
-        case 1: 
-                estate=0;
-                break;
-    }
-
-}
-
-void crankshaftSignal()
+void crankshaftSignal(UInt16 rpmCig)
 {
     //para 1200 rpm el perido es de 50ms
     //cantidad de ticks para 1200 rpm = 1000
     //aprox 28 ticks por pulso
-    UInt32 rpmAux;
+    UInt16 rpmAux;
     UInt32 ticksPorGrados;
     UInt8 grados;
     //grados = ticks1Rpm / 360;
-    UInt32 periodo = 0;
+    UInt16 periodo;
     static UInt16 dutyPos =  0;
     static UInt16 dutyNeg = 0;
     static UInt16 stage = 0;
-    static UInt16 contaDientes = 0;
+    static UInt16 vueltaCig = 0;
+    static UInt16 contaDientes = 0; 
+    static UInt16 contaDientes_Phsignal = 0;
     
-    rpmAux = RPM;
-    ticksPorGrados = 60000000 / (rpmAux * 10 * 360);
-    periodo = ((60000000) / (rpmAux * 36 * 10));   //periodo en ticks (ticks de un pulso))
-    periodo=periodo;
+    rpmAux = rpmCig;
+  //  ticksPorGrados = 60000000 / (rpmAux * 10 * 360);
+    periodo = ((60000000) / (rpmAux * 36 * 10));   //periodo en ticks (ticks de un pulso))  +1 para aproximar mejor
     switch(stage)
     {
         case 0:
             tickRpm = 0;
             tickActual = 0;
+            tickControlPh = 0;
             contaDientes = 0;
             contaDientesCig = 0;
+            vueltaCig = 0;
             dutyPos =  ((periodo * 20) / 100);
             dutyNeg = (periodo - dutyPos);
             stage++;
@@ -254,11 +241,18 @@ void crankshaftSignal()
                 if(contaDientes >=37)
                 {
                     dutyPos = ((periodo * 20) / 100);
+                    dutyPosAux = dutyPos; //Ancho de pulso igual CMP = CKP
                     dutyNeg = (periodo - dutyPos);
                     contaDientes = 0;
                     contaDientesCig = 0;
                     grados = tickActual / ticksPorGrados;
-                    tickActual = 0;
+                    vueltaCig++;
+                    if(vueltaCig == 2)  //segunda vuelta de cig
+                    {
+                        tickActual = 0;
+                        vueltaCig = 0;
+                    }
+                    
                 }
                 stage++;
             }
@@ -267,14 +261,20 @@ void crankshaftSignal()
             if(tickRpm >= dutyPos)
             {
                 rpmSignal = 0;
-                tickRpm = 0;
+//                tickRpm = 0;
                 contaDientes++;
-                contaDientesCig++;
+                contaDientes_Phsignal++;
                 if(contaDientes == 36) 
                 {
                     dutyPos = (dutyNeg / 3);
                     dutyNeg = (dutyNeg / 3);
                 }
+                if((tickControlPh >= 828))   //cada 6 pulsos de diente de cig
+                {
+                    camshaftSignal_2(RPM);
+                    
+                }
+                tickRpm = 0;
                 stage = 1;
             }
             break;
@@ -282,53 +282,58 @@ void crankshaftSignal()
             break;
     }
 }
-
-void camshaftSignal()
+void camshaftSignal_2(UInt16 rpmPh)
 {
-    UInt32 rpmAux;
-    UInt32 periodo = 0;
+    UInt16 rpmAux;
+    UInt16 periodo;
     static UInt8 stage = 0;
     static UInt8 contaDientes = 0;
     static UInt16 dutyPos =  0;
     static UInt16 dutyNeg = 0;
-    rpmAux = (RPM * 2);
-    periodo = ((600000000) / (rpmAux * 12 * 1));   //periodo en ticks. Para 1200 rpm = 208,333 tick
+    rpmAux = (rpm / 2);
+    periodo = ((60000000) / (rpmAux * 12 * 10));   //periodo en ticks. Para 1200 rpm = 208,333 tick
     switch(stage)                                   //se agregaron ceros para quitar los decimales y no usar float
     {                                               //pero poder tener mas precision. Entonces quedan 20833 tick
         case 0:
             tickFase = 0;
             contaDientes = 0;
-            dutyPos =  ((periodo * 20) / 100);       //20833*20/100=4166,6
+            dutyPos = dutyPosAux;//dutyPos =  ((periodo * 20) / 100);
+           // dutyPos =  ((periodo * 20) / 100);       //20833*20/100=4166,6
             dutyNeg = (periodo - dutyPos);
             //if(contaDientesCig >= 1)
             //{
                stage++; 
             //}
             
-            break;
+            break;           
         case 1:
             if(tickFase >= dutyNeg)
             {
                 faseSignal = 1;
                 tickFase = 0;
+                if(contaDientes == 12)
+                {
+                    dutyNeg = (((periodo - dutyPos) * 2) / (3));
+                }
                 if(contaDientes >=13)
                 {
-                    dutyPos = ((periodo * 20) / 100);
+                    dutyPos = dutyPosAux;//dutyPos = ((periodo * 20) / 100);
                     dutyNeg = (periodo - dutyPos);
                     contaDientes = 0;
                 }
                 stage++;
             }
-            break;
+            break;      
         case 2:
             if(tickFase >= dutyPos)
             {
                 faseSignal = 0;
                 tickFase = 0;
                 contaDientes++;
+                tickControlPh=0;      //cada 6 pulsos de cigueñal hizo un pulso de fase. Reinicio los tick
                 if(contaDientes == 12) 
                 {
-                    dutyPos = (dutyNeg / 3);
+                    dutyPos = dutyPosAux;//dutyPos = (dutyNeg / 3);
                     dutyNeg = (dutyNeg / 3);
                 }
                 stage = 1;
@@ -341,14 +346,104 @@ void camshaftSignal()
     
 }
 
+
+
+
+//void camshaftSignal(UInt16 rpm)
+//{
+//    UInt16 rpmAux;
+//    UInt16 periodo;
+//    static UInt8 stage = 0;
+//    static UInt8 contaDientes = 0;
+//    static UInt16 dutyPos =  0;
+//    static UInt16 dutyNeg = 0;
+//    rpmAux = (rpm * 2);
+//    periodo = ((60000000) / (rpmAux * 12 * 10));   //periodo en ticks. Para 1200 rpm = 208,333 tick
+//    switch(stage)                                   //se agregaron ceros para quitar los decimales y no usar float
+//    {                                               //pero poder tener mas precision. Entonces quedan 20833 tick
+//        case 0:
+//            tickFase = 0;
+//            contaDientes = 0;
+//            dutyPos = dutyPosAux;//dutyPos =  ((periodo * 20) / 100);
+//           // dutyPos =  ((periodo * 20) / 100);       //20833*20/100=4166,6
+//            dutyNeg = (periodo - dutyPos);
+//            //if(contaDientesCig >= 1)
+//            //{
+//               stage++; 
+//            //}
+//            
+//            break;           
+//        case 1:
+//            if(tickFase >= dutyNeg)
+//            {
+//                faseSignal = 1;
+//                tickFase = 0;
+//                if(contaDientes == 12)
+//                {
+//                    dutyNeg = (((periodo - dutyPos) * 2) / (3));
+//                }
+//                if(contaDientes >=13)
+//                {
+//                    dutyPos = dutyPosAux;//dutyPos = ((periodo * 20) / 100);
+//                    dutyNeg = (periodo - dutyPos);
+//                    contaDientes = 0;
+//                }
+//                stage++;
+//            }
+//            break;      
+//        case 2:
+//            if(tickFase >= dutyPos)
+//            {
+//                faseSignal = 0;
+//                tickFase = 0;
+//                contaDientes++;
+//                if(contaDientes == 12) 
+//                {
+//                    dutyPos = dutyPosAux;//dutyPos = (dutyNeg / 3);
+//                    dutyNeg = (dutyNeg / 3);
+//                }
+//                stage = 1;
+//                //stage = 1;
+//            }
+//            break;
+//        default:
+//            break;
+//    }
+//    
+//}
+
 void tick10us()
 {
     tickActual++;
+    tickControlPh++;
     tickRpm++;
     tickFase++;
     
 }
 
+void analogicValue()
+{   
+    analogValue = ADC1BUF0;
+    //maximo valor de rpm = 4196
+    //minimo valor de rpm = 100
+    rpm = ((4 * analogValue) + 100);
+}
+
+void analogInit()
+{
+    AD1CON1bits.SSRC = 0x02;    //Hago coincidir el Timer 3 con el fin del sample de la señal y empieza la conversion
+    AD1CSSLbits.CSSL = 0x00;    //Todos los ANX scan estan disable
+    AD1CON3bits.ADCS = 0x00;    //ADC conversion clock -> TAD = 2 * TPB
+    AD1CON3bits.ADRC = 0x0;     //Uso el clock de perifericos
+    AD1CON3bits.SAMC = 0x00;    //Auto-Sample time bits (lo dejo en cero aunque diga no esta permitido, asi estaba en el datasheet)
+    AD1CON2bits.SMPI = 0x01;    //Interrupts at the completion of conversion for each 2nd sample/convert sequence
+    
+    AD1CON1bits.ADON = 1;       //ADC ON
+    AD1CON1bits.ASAM = 1;       //Sampling begins immediately after last conversion completes; SAMP bit is automatically set
+}
+/*******************************************************************************
+ End of File
+ */
 /*******************************************************************************
  End of File
  */

@@ -130,7 +130,7 @@ const SYS_TMR_INIT sysTmrInitData =
 {
     .moduleInit = {SYS_MODULE_POWER_RUN_FULL},
     .drvIndex = DRV_TMR_INDEX_0,
-    .tmrFreq = 1000, 
+    .tmrFreq = 1000,
 };
 // </editor-fold>
 

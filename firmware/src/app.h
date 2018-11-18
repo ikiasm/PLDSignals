@@ -58,6 +58,7 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 #include <stdlib.h>
 #include "system_config.h"
 #include "system_definitions.h"
+#include "generales.h"
 
 // DOM-IGNORE-BEGIN
 #ifdef __cplusplus  // Provide C++ Compatibility
@@ -198,9 +199,10 @@ void APP_Initialize ( void );
 
 void APP_Tasks( void );
 
-void crankshaftSignal();
-void camshaftSignal();
-void analog_read();
+void crankshaftSignal(UInt16 rpmCig);
+void camshaftSignal_2(UInt16 rpmPh);
+void analogInit(void);
+void analogicValue(void);
 void tick50us();
 void tick10us();
 

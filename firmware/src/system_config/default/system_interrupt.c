@@ -80,6 +80,7 @@ void __ISR(_TIMER_1_VECTOR, ipl1AUTO) IntHandlerDrvTmrInstance0(void)
 void __ISR(_TIMER_3_VECTOR, ipl1AUTO) IntHandlerDrvTmrInstance1(void)
 {
     while (!IFS1 & 0x0002){};
+    delayDump();
     analogicValue();
     IFS1CLR = 0x0002; // clear ADIF
 

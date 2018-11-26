@@ -70,6 +70,8 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 #define faseTRIS    TRISBbits.TRISB14
 #define rpmSignal   LATBbits.LATB15
 #define faseSignal  LATBbits.LATB14
+#define pin3TRIS    TRISBbits.TRISB13
+#define pin3        LATBbits.LATB13
 
 
 static int tickRpm = 0;
@@ -77,9 +79,19 @@ static int tickActual = 0;
 static int tickFase = 0;
 static int dutyPosAux = 0;
 static int contaDientesCig = 0;
+static int periodoRpm = 0;
 
 static int analogValue = 0;
 static int rpm = 100;
+static int delay = 0;
+static bool sincro = false;
+
+static bool sincroFase = false;
+static bool sincroRpm = false;
+static int ticksVuelta = 0;
+static int avanceFase = 0;
+static int avanceRpm = 0;
+static int ticksPorGrados = 0;
 // *****************************************************************************
 /* Application Data
 
@@ -164,6 +176,7 @@ void APP_Tasks ( void )
             
             rpmTRIS = 0;
             faseTRIS = 0;
+            pin3TRIS = 0;
             
             DRV_ADC_Open();
             DRV_ADC_Start();
@@ -181,9 +194,18 @@ void APP_Tasks ( void )
 
         case APP_STATE_SERVICE_TASKS:
         {
+//            ticksVuelta = ticksPorVuelta(rpm);
+//            avanceFase = ticksVuelta - avanceEnTicks(55 , rpm);
+//            avanceRpm = ticksVuelta - avanceEnTicks(65 , rpm);
+//            if(tickActual >= avanceRpm)
+//            {
+//                sincroFase = true;
+//            }
             crankshaftSignal(rpm);
             camshaftSignal(rpm);
-            
+//            crankshaftSignal(rpm);
+//            camshaftSignal(rpm);
+//            poner capacitor al potenciometro de rpm
             break;
         }
 
@@ -204,17 +226,16 @@ void crankshaftSignal(int rpm)
     //para 1200 rpm el perido es de 50ms
     //cantidad de ticks para 1200 rpm = 1000
     //aprox 28 ticks por pulso
-    int rpmAux = rpm;
-    int ticksPorGrados;
-    int grados;
-    ticksPorGrados = 60000000 / (rpmAux * 10 * 360);
-    //grados = ticks1Rpm / 360;
-    static int periodo = 0;
-    periodo = ((60000000) / (rpmAux * 36 * 10));   //periodo en ticks
+    int rpmAux  = rpm;
     static int dutyPos =  0;
     static int dutyNeg = 0;
     static int stage = 0;
     static int contaDientes = 0;
+    static int vuelta = 1;
+    
+    ticksPorGrados = ((60000000) / ((rpmAux) * (10) * (360)));  
+    periodoRpm = ((60000000) / (rpmAux * 36 * 10));   //periodo en ticks
+    
     switch(stage)
     {
         case 0:
@@ -222,27 +243,34 @@ void crankshaftSignal(int rpm)
             tickActual = 0;
             contaDientes = 0;
             contaDientesCig = 0;
-            dutyPos =  ((periodo * 20) / 100);
-            dutyNeg = (periodo - dutyPos);
+            dutyPos =  ((periodoRpm * 20) / 100);
+            dutyNeg = (periodoRpm - dutyPos);
             stage++;
             break;
         case 1:
+            if((tickActual >= (ticksPorGrados * 45)) && contaDientes == 5)
+                {
+                    if((vuelta%2) == 0)
+                    {
+                        sincroFase = true;
+                        pin3 = 1;
+                    }
+                    
+                }
             if(tickRpm >= dutyNeg)
             {
                 rpmSignal = 1;
                 tickRpm = 0;
-                
-                if(contaDientes >=37)
+                stage++;
+                if(contaDientes ==37)
                 {
-                    dutyPos = ((periodo * 20) / 100);
+                    dutyPos = ((periodoRpm * 20) / 100);
                     dutyPosAux = dutyPos; //Ancho de pulso igual CMP = CKP
-                    dutyNeg = (periodo - dutyPos);
+                    dutyNeg = (periodoRpm - dutyPos);
                     contaDientes = 0;
                     contaDientesCig = 0;
-                    grados = tickActual / ticksPorGrados;
                     tickActual = 0;
                 }
-                stage++;
             }
             break;
         case 2:
@@ -251,13 +279,17 @@ void crankshaftSignal(int rpm)
                 rpmSignal = 0;
                 tickRpm = 0;
                 contaDientes++;
-                contaDientesCig++;
+                stage = 1;
+                if((tickActual >= (ticksPorGrados * 45)) && (contaDientes == 8))
+                {   //contaDientes == 8 unicamente para darle duracion al pin3
+                    pin3 = 0;
+                    vuelta++;
+                }
                 if(contaDientes == 36) 
                 {
                     dutyPos = (dutyNeg / 3);
                     dutyNeg = (dutyNeg / 3);
                 }
-                stage = 1;
             }
             break;
         default:
@@ -270,37 +302,43 @@ void camshaftSignal(int rpm)
     int rpmAux = (rpm / 2);
     static int stage = 0;
     static int contaDientes = 0;
-    static int periodo = 0;
+    static int periodoFase = 0;//(periodoRpm * 6);
     static int dutyPos =  0;
     static int dutyNeg = 0;
-    periodo = ((60000000) / (rpmAux * 12 * 10));   //periodo en ticks
+    periodoFase = (periodoRpm * 6);//((60000000) / (rpmAux * 12 * 10));   //periodo en ticks
     switch(stage)
     {
         case 0:
             tickFase = 0;
             contaDientes = 0;
             dutyPos = dutyPosAux;//dutyPos =  ((periodo * 20) / 100);
-            dutyNeg = (periodo - dutyPos);
-            
-            stage++;
-            
+            dutyNeg = (periodoFase - dutyPos);
+            faseSignal = 0;
+            if(sincroFase)
+            {
+                faseSignal = 1;
+                sincroFase = false;
+                stage = 2;
+            }
             break;
         case 1:
             if(tickFase >= dutyNeg)
             {
                 faseSignal = 1;
                 tickFase = 0;
+                stage++;
                 if(contaDientes == 12)
-                {
-                    dutyNeg = (((periodo - dutyPos) * 2) / (3));
+                {   //dutyNeg funciona unicamente cuando no hay sincronismo
+                    //dutyNeg = (((periodoFase - dutyPos) * 2) / (3));
+                    sincroFase = false;
                 }
                 if(contaDientes >=13)
                 {
                     dutyPos = dutyPosAux;//dutyPos = ((periodo * 20) / 100);
-                    dutyNeg = (periodo - dutyPos);
+                    dutyNeg = (periodoFase - dutyPos);
                     contaDientes = 0;
+                    stage = 0;
                 }
-                stage++;
             }
             break;
         case 2:
@@ -309,12 +347,19 @@ void camshaftSignal(int rpm)
                 faseSignal = 0;
                 tickFase = 0;
                 contaDientes++;
+                stage = 1;
                 if(contaDientes == 12) 
                 {
-                    dutyPos = dutyPosAux;//dutyPos = (dutyNeg / 3);
+                    dutyPos = dutyPosAux;
                     dutyNeg = (dutyNeg / 3);
                 }
-                stage = 1;
+                if(contaDientes == 13)
+                {
+                    dutyPos = dutyPosAux;
+                    dutyNeg = (periodoFase - dutyPos);
+                    contaDientes = 0;
+                    stage = 0;
+                }
             }
             break;
         default:
@@ -323,6 +368,24 @@ void camshaftSignal(int rpm)
     
 }
 
+int avanceEnTicks(int grados, int rpm)
+{
+    int rev;
+    int gradosAux;
+    
+    rev = 60000000 / rpm;
+    gradosAux = ((rev) / (360 * 10));
+    gradosAux = gradosAux * grados;
+    return gradosAux;
+}
+
+int ticksPorVuelta(int rpm)
+{
+    int rpmAux = rpm;
+    int tickAuxiliar;
+    tickAuxiliar = 60000000 / (rpmAux * 10);
+    return tickAuxiliar;
+}
 void tick10us()
 {
     tickActual++;
@@ -332,7 +395,7 @@ void tick10us()
 }
 
 void analogicValue()
-{   
+{
     analogValue = ADC1BUF0;
     //maximo valor de rpm = 4196
     //minimo valor de rpm = 100
@@ -350,6 +413,11 @@ void analogInit()
     
     AD1CON1bits.ADON = 1;       //ADC ON
     AD1CON1bits.ASAM = 1;       //Sampling begins immediately after last conversion completes; SAMP bit is automatically set
+}
+
+void delayDump()
+{
+    delay++;
 }
 /*******************************************************************************
  End of File
